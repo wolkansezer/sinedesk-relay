@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0A0E16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SineDesk">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SineDesk — Bağlan</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="stylesheet" href="/static/sd.css">
+<style>
+body{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 18px calc(28px + var(--safe-b));
+  background:radial-gradient(900px 500px at 50% -10%,rgba(255,61,90,.18),transparent 60%),radial-gradient(700px 400px at 100% 110%,rgba(255,122,61,.08),transparent 60%),var(--bg)}
+.box{width:min(100%,420px)}
+.hero{text-align:center;margin-bottom:26px}
+.hero h1{font-size:30px;letter-spacing:-.02em;margin-top:14px}
+.hero p{color:var(--muted);margin-top:6px}
+.idin{font-size:24px;height:58px;text-align:center;letter-spacing:.18em;font-family:var(--mono)}
+.recent{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.rc{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--raised);border:1px solid var(--line);cursor:pointer}
+.rc:hover{border-color:var(--line2)}
+.rc i{width:36px;height:36px;border-radius:10px;background:var(--acc-soft);color:var(--acc);display:flex;align-items:center;justify-content:center;flex:none}
+.tip{display:flex;gap:10px;font-size:12.5px;color:var(--muted);margin-top:18px;padding:12px 14px;border-radius:12px;border:1px dashed var(--line2)}
+</style>
+</head>
+<body>
+<div class="box">
+  <div class="hero">
+    <img src="/static/icon.svg" width="64" height="64" alt="" style="border-radius:18px;box-shadow:0 14px 40px rgba(255,61,90,.35)">
+    <h1>Sine<span style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">Desk</span></h1>
+    <p>Uzak masaüstüne güvenli bağlantı</p>
+  </div>
+
+  <form class="card" id="relayCard">
+    <p style="font-weight:700;font-size:16px">Uzak masaüstü</p>
+    <p class="muted" style="font-size:13px;margin:4px 0 16px">Karşı bilgisayardaki 9 haneli SineDesk ID'yi girin.</p>
+    <input class="in idin" id="rid" inputmode="numeric" autocomplete="off" placeholder="000 000 000" maxlength="11" required>
+    <button class="btn pri" style="width:100%;height:48px;margin-top:14px">Bağlan</button>
+    <p id="noRelay" style="display:none;font-size:12.5px;color:var(--warn);margin-top:12px">Bu bilgisayarda relay sunucusu tanımlı değil. SineDesk → Ayarlar → Relay sunucusu adresini girin; sonra telefon her ağdan ID ile bağlanır.</p>
+    <div class="recent" id="recent"></div>
+  </form>
+
+  <div class="card" id="hostCard" style="display:none;margin-top:14px">
+    <p style="font-weight:700;font-size:15px">Aynı Wi-Fi: bu bilgisayar</p>
+    <p class="muted" style="font-size:13px;margin:4px 0 16px">SineDesk açık olan <b id="hn"></b> bilgisayarının ekranını görüp yönetin.</p>
+    <a class="btn" style="width:100%;height:44px" href="/viewer?target=self">Bağlan</a>
+  </div>
+
+  <div class="tip"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+    <span>Telefonunuzda tarayıcı menüsünden <b>“Ana Ekrana Ekle”</b> ile SineDesk'i uygulama gibi kullanabilirsiniz.</span></div>
+  <p class="dim" style="text-align:center;font-size:12px;margin-top:20px">SineDesk · Program sahibi Volkan Sezer · <a href="mailto:volkan.sezer@outlook.com.tr">volkan.sezer@outlook.com.tr</a></p>
+</div>
+<script>
+const $=s=>document.querySelector(s);
+let RELAY='';
+fetch('/info').then(r=>r.json()).then(i=>{
+  if(i.kind==='host'){ $('#hostCard').style.display=''; $('#hn').textContent=i.name||location.hostname; RELAY=i.relay||''; if(!RELAY) $('#noRelay').style.display=''; }
+}).catch(()=>{});
+renderRecent();
+const fmt=v=>v.replace(/\D/g,'').slice(0,9).replace(/(\d{3})(?=\d)/g,'$1 ');
+$('#rid').addEventListener('input',e=>e.target.value=fmt(e.target.value));
+function getRecent(){ try{return JSON.parse(localStorage.getItem('sd_recent')||'[]')}catch(e){return[]} }
+function renderRecent(){ const r=$('#recent'); r.innerHTML=''; getRecent().forEach(id=>{ const d=document.createElement('div'); d.className='rc';
+  d.innerHTML='<i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></i><span class="mono" style="font-weight:600;letter-spacing:.1em"></span>';
+  d.querySelector('span').textContent=fmt(id); d.onclick=()=>go(id); r.append(d); }); }
+function go(id){ try{ localStorage.setItem('sd_recent',JSON.stringify([id,...getRecent().filter(x=>x!==id)].slice(0,5))); }catch(e){} location.href='/viewer?id='+id+(RELAY?'&relay='+encodeURIComponent(RELAY):''); }
+$('#relayCard').onsubmit=e=>{ e.preventDefault(); const id=$('#rid').value.replace(/\D/g,''); if(id.length!==9) return alert('ID 9 haneli olmalı'); go(id); };
+</script>
+</body>
+</html>

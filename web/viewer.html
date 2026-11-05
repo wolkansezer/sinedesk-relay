@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0A0E16">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SineDesk — Uzak Masaüstü</title>
+<link rel="icon" href="/static/icon.svg">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="stylesheet" href="/static/sd.css">
+<style>
+html,body{overflow:hidden;background:#05070B;overscroll-behavior:none}
+#stage{position:fixed;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none}
+#stage.zoomed{overflow:auto;display:block}
+#stage.pan{touch-action:auto}
+#cv{display:block;background:#000;image-rendering:auto;cursor:none;box-shadow:0 0 0 1px #1a2230}
+#stage.zoomed #cv{margin:0 auto}
+#cursor{position:fixed;width:18px;height:18px;pointer-events:none;z-index:5;display:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.7));transform:translate(-2px,-1px)}
+/* Araç çubuğu */
+#bar{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:4px;padding:5px;border-radius:14px;background:rgba(18,25,38,.92);border:1px solid var(--line2);box-shadow:var(--shadow);backdrop-filter:blur(10px);transition:transform .25s,opacity .25s;max-width:calc(100vw - 16px)}
+#bar.hidden{transform:translate(-50%,calc(-100% - 20px));opacity:0}
+#bar .sep{width:1px;height:22px;background:var(--line2);margin:0 3px}
+#bar .title{padding:0 8px 0 4px;font-weight:700;font-size:13px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;gap:8px;align-items:center}
+#stats{font-size:11px;color:var(--muted);padding:0 6px;white-space:nowrap}
+#handle{position:fixed;top:calc(4px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:19;width:64px;height:22px;border-radius:0 0 12px 12px;background:rgba(18,25,38,.85);border:1px solid var(--line2);border-top:0;display:none;align-items:center;justify-content:center;cursor:pointer}
+#handle.show{display:flex}
+.tb{width:36px;height:36px;border-radius:10px;border:0;background:transparent;color:var(--text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+.tb:hover{background:var(--hover)}.tb.on{background:var(--acc-soft);color:var(--acc)}
+.tb svg{width:19px;height:19px}
+.tb.red{color:#ff7d93}
+/* Menü */
+.menu{position:fixed;z-index:30;top:calc(62px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:min(94vw,360px);background:var(--surface);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);padding:8px;display:none;max-height:70vh;overflow:auto}
+.menu.show{display:block;animation:tin .15s}
+.menu h4{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);padding:10px 10px 6px}
+.mi{display:flex;align-items:center;gap:12px;width:100%;padding:10px;border-radius:9px;border:0;background:none;cursor:pointer;text-align:left}
+.mi:hover{background:var(--hover)}.mi svg{width:18px;height:18px;color:var(--muted)}
+.mi small{margin-left:auto;color:var(--dim);font-size:12px}
+.seg{display:flex;gap:4px;padding:4px 8px 8px}
+.seg button{flex:1;height:32px;border-radius:8px;border:1px solid var(--line2);background:var(--raised);cursor:pointer;font-size:12px;font-weight:600}
+.seg button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+/* Bağlantı katmanı */
+#ov{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(1200px 600px at 50% -10%,rgba(255,61,90,.16),transparent 60%),var(--bg)}
+#ov.hide{display:none}
+.connbox{width:min(100%,400px);text-align:center}
+.connbox .card{padding:26px;text-align:left;margin-top:22px}
+.spin{width:44px;height:44px;border-radius:50%;border:3px solid var(--line2);border-top-color:var(--acc);animation:sp 1s linear infinite;margin:6px auto 14px}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* Sohbet */
+#chat{position:fixed;right:12px;bottom:calc(12px + var(--safe-b));width:min(92vw,330px);height:min(60vh,420px);z-index:25;background:var(--surface);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);display:none;flex-direction:column;overflow:hidden}
+#chat.show{display:flex}
+#chatlog{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:85%;padding:8px 11px;border-radius:12px;background:var(--raised);font-size:13px;align-self:flex-start;word-wrap:break-word}
+.msg.me{align-self:flex-end;background:var(--acc);color:#fff}
+#kb{position:fixed;left:-1000px;top:0;opacity:0;width:10px;height:10px;font-size:16px}
+#keys{position:fixed;left:0;right:0;bottom:0;z-index:22;display:none;gap:6px;padding:8px 8px calc(8px + var(--safe-b));background:rgba(18,25,38,.96);border-top:1px solid var(--line2);overflow-x:auto}
+#keys.show{display:flex}
+#keys button{flex:none;height:38px;min-width:46px;padding:0 10px;border-radius:9px;border:1px solid var(--line2);background:var(--raised);font-weight:600;font-size:13px;cursor:pointer}
+#keys button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+@media (max-width:640px){#bar .title,#stats,.desk-only{display:none}#bar{gap:1px;padding:4px}.tb{width:34px;height:34px}}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv" width="16" height="9"></canvas></div>
+<svg id="cursor" viewBox="0 0 24 24"><path d="M4 2l15 11-6.5 1.2L16 21l-3 1.4-3.4-6.9L4 20z" fill="#fff" stroke="#000" stroke-width="1.4" stroke-linejoin="round"/></svg>
+
+<div id="handle" title="Araç çubuğu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+<div id="bar" class="hidden">
+  <div class="title"><img src="/static/icon.svg" width="20" height="20" alt=""><span id="rname">SineDesk</span></div>
+  <span id="stats">— fps</span>
+  <div class="sep desk-only"></div>
+  <button class="tb" id="bKb" title="Klavye"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 15h10"/></svg></button>
+  <button class="tb" id="bMouse" title="Fare modu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11V5.5a1.5 1.5 0 013 0V11m0-1.5a1.5 1.5 0 013 0V11m0-.5a1.5 1.5 0 013 0V15a6 6 0 01-6 6h-1a6 6 0 01-5-2.7L3.6 14a1.5 1.5 0 012.4-1.8L9 15"/></svg></button>
+  <button class="tb" id="bZoom" title="Yakınlaştır"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg></button>
+  <button class="tb" id="bPan" title="Kaydırma modu" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
+  <button class="tb" id="bChat" title="Sohbet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></button>
+  <button class="tb" id="bMore" title="Diğer"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+  <button class="tb desk-only" id="bFs" title="Tam ekran"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg></button>
+  <button class="tb" id="bHide" title="Gizle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 15l-6-6-6 6"/></svg></button>
+  <div class="sep"></div>
+  <button class="tb red" id="bClose" title="Bağlantıyı kes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+</div>
+
+<div class="menu" id="menu">
+  <h4>Görüntü kalitesi</h4>
+  <div class="seg" id="segQ"><button data-q="low">Düşük</button><button data-q="mid">Dengeli</button><button data-q="high">Yüksek</button><button data-q="max">En iyi</button></div>
+  <h4>Monitör</h4>
+  <div class="seg" id="segM"></div>
+  <h4>Özel tuşlar</h4>
+  <button class="mi" data-combo="ControlLeft,ShiftLeft,Escape"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3-4 3 3 4-6"/></svg>Görev Yöneticisi<small>Ctrl+Shift+Esc</small></button>
+  <button class="mi" data-combo="AltLeft,Tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="12" height="10" rx="1"/><rect x="9" y="9" width="12" height="10" rx="1"/></svg>Pencere değiştir<small>Alt+Tab</small></button>
+  <button class="mi" data-combo="MetaLeft"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5l8-1v7H3zm0 14l8 1v-8H3zm9-15l9-1.2V11h-9zm0 16.2L21 21v-8.5h-9z"/></svg>Başlat menüsü<small>Win</small></button>
+  <button class="mi" data-combo="MetaLeft,KeyD"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/></svg>Masaüstünü göster<small>Win+D</small></button>
+  <button class="mi" data-combo="MetaLeft,KeyL"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Bilgisayarı kilitle<small>Win+L</small></button>
+  <button class="mi" data-combo="AltLeft,F4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>Pencereyi kapat<small>Alt+F4</small></button>
+  <h4>Aktarım</h4>
+  <button class="mi" id="mClipSend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2M12 11v6M9 14l3-3 3 3"/></svg>Metni karşı panoya gönder</button>
+  <button class="mi" id="mClipGet"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2M12 11v6M9 14l3 3 3-3"/></svg>Karşı panodaki metni al</button>
+  <button class="mi" id="mFile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3-3 3 3"/></svg>Dosya gönder<small id="fileProg"></small></button>
+  <button class="mi" id="mFs2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3M21 8V5a2 2 0 00-2-2h-3M3 16v3a2 2 0 002 2h3M16 21h3a2 2 0 002-2v-3"/></svg>Tam ekran</button>
+</div>
+<input type="file" id="fileIn" multiple hidden>
+<textarea id="kb" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
+
+<div id="keys">
+  <button data-mod="ControlLeft">Ctrl</button><button data-mod="AltLeft">Alt</button><button data-mod="ShiftLeft">Shift</button><button data-mod="MetaLeft">Win</button>
+  <button data-k="Escape">Esc</button><button data-k="Tab">Tab</button><button data-k="Enter">Enter</button><button data-k="Backspace">⌫</button><button data-k="Delete">Del</button>
+  <button data-k="ArrowLeft">←</button><button data-k="ArrowUp">↑</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
+  <button data-k="Home">Home</button><button data-k="End">End</button><button data-k="PageUp">PgUp</button><button data-k="PageDown">PgDn</button>
+  <button data-k="F1">F1</button><button data-k="F2">F2</button><button data-k="F5">F5</button><button data-k="F11">F11</button><button data-k="F12">F12</button>
+</div>
+
+<div id="chat">
+  <div class="modal-h" style="padding:12px 14px"><h3 style="font-size:14px">Sohbet</h3><button class="btn sm ghost icon" id="chatX">✕</button></div>
+  <div id="chatlog"></div>
+  <form id="chatF" class="row" style="padding:10px;border-top:1px solid var(--line)"><input class="in" id="chatIn" placeholder="Mesaj yazın…" style="height:38px"><button class="btn pri sm" style="height:38px">Gönder</button></form>
+</div>
+
+<div class="modal-bg" id="clipM"><div class="modal">
+  <div class="modal-h"><h3 id="clipT">Pano</h3></div>
+  <div class="modal-b"><textarea class="in" id="clipTxt" style="height:160px;padding:12px;resize:vertical"></textarea><p class="muted" id="clipHint" style="font-size:12px;margin-top:8px"></p></div>
+  <div class="modal-f"><button class="btn" id="clipCancel">Kapat</button><button class="btn pri" id="clipOk">Gönder</button></div>
+</div></div>
+
+<div id="ov">
+  <div class="connbox">
+    <div class="logo" style="justify-content:center;font-size:26px"><img src="/static/icon.svg" width="40" height="40" alt=""><span>Sine<b>Desk</b></span></div>
+    <div class="card" id="ovCard">
+      <div id="ovWait"><div class="spin"></div><p style="text-align:center" id="ovMsg">Bağlanılıyor…</p></div>
+      <form id="ovAuth" style="display:none">
+        <p style="font-weight:700;font-size:16px;margin-bottom:4px" id="ovTitle">Uzak bilgisayar</p>
+        <p class="muted" style="font-size:13px;margin-bottom:16px">Karşı bilgisayarda görünen şifreyi girin.</p>
+        <label class="field"><span>Şifre</span><input class="in mono" id="pw" type="password" autocomplete="current-password" required></label>
+        <button class="btn pri" style="width:100%;margin-top:16px;height:46px">Bağlan</button>
+      </form>
+      <div id="ovErr" style="display:none;text-align:center">
+        <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,84,112,.12);color:var(--bad);display:flex;align-items:center;justify-content:center;margin:4px auto 14px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="10"/></svg></div>
+        <p style="font-weight:700" id="ovErrT">Bağlantı kapandı</p><p class="muted" style="font-size:13px;margin-top:4px" id="ovErrD"></p>
+        <div class="row" style="margin-top:18px;justify-content:center"><button class="btn" id="ovBack">Geri</button><button class="btn pri" id="ovRetry">Yeniden bağlan</button></div>
+      </div>
+    </div>
+    <p class="dim" style="font-size:12px;margin-top:18px">SineDesk · Volkan Sezer</p>
+  </div>
+</div>
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
+const qs=new URLSearchParams(location.search);
+const MOBILE=matchMedia('(pointer:coarse)').matches;
+const cv=$('#cv'), ctx=cv.getContext('2d'), stage=$('#stage'), curEl=$('#cursor');
+let ws=null, authed=false, frames=0, fps=0, rtt=0, cur={x:.5,y:.5}, zoom=1, pan=false, mouseMode=MOBILE?'touch':'mouse';
+let monitors=[], curMon=1, quality=MOBILE?'mid':'high', perm={input:true,files:true,clip:true}, ackWaiters={};
+const Q={low:{q:35,maxw:1024,fps:10},mid:{q:55,maxw:1440,fps:15},high:{q:70,maxw:1920,fps:24},max:{q:88,maxw:3840,fps:30}};
+
+function toast(t,k=''){const d=document.createElement('div');d.className='toast '+k;d.textContent=t;$('#toasts').append(d);setTimeout(()=>d.remove(),3500)}
+function wsUrl(){
+  const sec=location.protocol==='https:'?'wss':'ws';
+  if(qs.get('id')){
+    const relay=qs.get('relay');
+    if(relay) return relay.replace(/^http/,'ws').replace(/\/$/,'')+'/ws/client?id='+encodeURIComponent(qs.get('id'));
+    return `${sec}://${location.host}/ws/client?id=${encodeURIComponent(qs.get('id'))}`;
+  }
+  const t=qs.get('target');
+  if(!t||t==='self') return `${sec}://${location.host}/ws/remote`;
+  const hp=/:\d+$/.test(t)&&!/^\[.*\]$/.test(t)?t:t+':7070';
+  return `ws://${hp}/ws/remote`;
+}
+const label=qs.get('name')||qs.get('id')||(qs.get('target')&&qs.get('target')!=='self'?qs.get('target'):location.hostname);
+$('#rname').textContent=label; $('#ovTitle').textContent=label; document.title='SineDesk — '+label;
+
+function ovState(s,msg){ $('#ov').classList.toggle('hide',s==='none');
+  $('#ovWait').style.display=s==='wait'?'':'none'; $('#ovAuth').style.display=s==='auth'?'':'none'; $('#ovErr').style.display=s==='err'?'':'none';
+  if(s==='wait') $('#ovMsg').textContent=msg||'Bağlanılıyor…';
+  if(s==='err'){ $('#ovErrD').textContent=msg||''; }
+  if(s==='auth') setTimeout(()=>$('#pw').focus(),50);
+}
+function send(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
+
+function connect(){
+  authed=false; ovState('wait');
+  try{ ws=new WebSocket(wsUrl()); }catch(e){ return ovState('err','Adres geçersiz: '+e.message); }
+  ws.binaryType='arraybuffer';
+  let gotHello=false, failReason='';
+  ws.onmessage=async ev=>{
+    if(typeof ev.data!=='string'){ drawFrame(ev.data); return; }
+    const m=JSON.parse(ev.data);
+    switch(m.t){
+      case 'hello': gotHello=true; if(!qs.get('name')&&m.name){$('#rname').textContent=m.name;$('#ovTitle').textContent=m.name;} ovState('auth'); break;
+      case 'wait': ovState('wait','Karşı tarafın bağlantıyı onaylaması bekleniyor…'); break;
+      case 'auth_fail': failReason=m.reason; ovState('err',m.reason); $('#ovErrT').textContent='Bağlanılamadı'; break;
+      case 'auth_ok': authed=true; monitors=m.monitors||[]; perm=m.perm||perm; ovState('none'); buildMon(); applyQ(quality); showBar(true);
+        toast(perm.input?'Bağlandı — kontrol sizde':'Bağlandı — yalnızca izleme','ok'); break;
+      case 'cur': cur={x:m.x,y:m.y}; placeCursor(); break;
+      case 'pong': rtt=Math.round(performance.now()-m.ts); break;
+      case 'chat': addMsg(m.text,false); if(!$('#chat').classList.contains('show')) toast('💬 '+m.text); break;
+      case 'clip': showClip('get',m.text); break;
+      case 'note': toast(m.text,'ok'); break;
+      case 'file_ack': ackWaiters[m.id]&&ackWaiters[m.id](); break;
+      case 'file_ok': toast('Dosya gönderildi: '+m.name,'ok'); break;
+    }
+  };
+  ws.onclose=()=>{ releaseMods(); if(!failReason){ $('#ovErrT').textContent=authed?'Bağlantı kapandı':'Bağlanılamadı'; ovState('err',authed?'Uzak oturum sona erdi.':'Bilgisayara ulaşılamadı. SineDesk açık mı, adres ve port doğru mu?'); } authed=false; };
+}
+$('#ovAuth').onsubmit=e=>{e.preventDefault(); send({t:'auth',pw:$('#pw').value.trim()}); ovState('wait','Doğrulanıyor…');};
+$('#ovRetry').onclick=()=>connect();
+$('#ovBack').onclick=()=>{ if(history.length>1) history.back(); else location.href='/'; };
+$('#bClose').onclick=()=>{ if(ws) ws.close(); };
+
+// Kare çizimi
+async function drawFrame(buf){
+  let bmp;
+  try{ bmp=await createImageBitmap(new Blob([buf],{type:'image/jpeg'})); }
+  catch(e){ bmp=await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=URL.createObjectURL(new Blob([buf],{type:'image/jpeg'}));}); }
+  if(cv.width!==bmp.width||cv.height!==bmp.height){ cv.width=bmp.width; cv.height=bmp.height; layout(); }
+  ctx.drawImage(bmp,0,0); bmp.close&&bmp.close(); frames++; send({t:'ack'});
+}
+setInterval(()=>{fps=frames;frames=0; if(authed){send({t:'ping',ts:performance.now()}); $('#stats').textContent=`${fps} fps · ${rtt} ms · ${cv.width}×${cv.height}`;}},1000);
+
+// Yerleşim / yakınlaştırma
+function layout(){
+  const W=innerWidth,H=innerHeight,ar=cv.width/cv.height; let w=W,h=W/ar; if(h>H){h=H;w=H*ar;}
+  cv.style.width=Math.round(w*zoom)+'px'; cv.style.height=Math.round(h*zoom)+'px';
+  stage.classList.toggle('zoomed',zoom>1); placeCursor();
+}
+addEventListener('resize',layout);
+stage.addEventListener('scroll',placeCursor);
+function placeCursor(){ const r=cv.getBoundingClientRect(); if(!authed){curEl.style.display='none';return;}
+  curEl.style.display='block'; curEl.style.left=(r.left+cur.x*r.width)+'px'; curEl.style.top=(r.top+cur.y*r.height)+'px'; }
+const ZOOMS=[1,1.5,2,3];
+$('#bZoom').onclick=()=>{ zoom=ZOOMS[(ZOOMS.indexOf(zoom)+1)%ZOOMS.length]; layout(); $('#bZoom').classList.toggle('on',zoom>1);
+  $('#bPan').style.display=zoom>1&&MOBILE?'':'none'; if(zoom===1) setPan(false); toast('Yakınlaştırma: '+(zoom===1?'Sığdır':'%'+zoom*100)); };
+function setPan(v){ pan=v; stage.classList.toggle('pan',v); $('#bPan').classList.toggle('on',v); }
+$('#bPan').onclick=()=>{ setPan(!pan); toast(pan?'Kaydırma modu: ekranı parmakla gezdirin':'Kontrol moduna dönüldü'); };
+
+// Araç çubuğu
+let hideT; function showBar(auto){ $('#bar').classList.remove('hidden'); $('#handle').classList.remove('show'); clearTimeout(hideT); if(auto) hideT=setTimeout(hideBar, MOBILE?4000:6000); }
+function hideBar(){ $('#bar').classList.add('hidden'); $('#menu').classList.remove('show'); $('#handle').classList.add('show'); }
+$('#bHide').onclick=hideBar; $('#handle').onclick=()=>showBar(false);
+addEventListener('mousemove',e=>{ if(authed&&e.clientY<12) showBar(true); });
+$('#bMore').onclick=e=>{ e.stopPropagation(); $('#menu').classList.toggle('show'); clearTimeout(hideT); };
+document.addEventListener('pointerdown',e=>{ if(!e.target.closest('#menu,#bMore')) $('#menu').classList.remove('show'); });
+function fsToggle(){ const d=document.documentElement; if(!document.fullscreenElement) (d.requestFullscreen||d.webkitRequestFullscreen).call(d); else document.exitFullscreen(); }
+$('#bFs').onclick=fsToggle; $('#mFs2').onclick=fsToggle;
+$('#bMouse').onclick=()=>{ mouseMode=mouseMode==='touch'?'pad':'touch'; $('#bMouse').classList.toggle('on',mouseMode==='pad');
+  toast(mouseMode==='pad'?'Touchpad modu: parmağınızla imleci kaydırın, dokunun = tıklama':'Dokunmatik mod: dokunduğunuz yere tıklanır'); };
+if(!MOBILE) $('#bMouse').style.display='none';
+
+function buildMon(){ const s=$('#segM'); s.innerHTML=''; (monitors.length?monitors:[{w:0,h:0}]).forEach((m,i)=>{ const b=document.createElement('button'); b.textContent=`${i+1}${m.w?` · ${m.w}×${m.h}`:''}`; b.classList.toggle('on',i+1===curMon); b.onclick=()=>{curMon=i+1;applyQ(quality);buildMon();}; s.append(b); }); }
+function applyQ(k){ quality=k; const p=Q[k]; send({t:'cfg',q:p.q,fps:p.fps,maxw:p.maxw,mon:curMon}); $$('#segQ button').forEach(b=>b.classList.toggle('on',b.dataset.q===k)); }
+$$('#segQ button').forEach(b=>b.onclick=()=>applyQ(b.dataset.q));
+$$('[data-combo]').forEach(b=>b.onclick=()=>{ send({t:'combo',keys:b.dataset.combo.split(',')}); $('#menu').classList.remove('show'); });
+
+// Koordinat
+function norm(cx,cy){ const r=cv.getBoundingClientRect(); return {x:Math.min(1,Math.max(0,(cx-r.left)/r.width)), y:Math.min(1,Math.max(0,(cy-r.top)/r.height))}; }
+let lastMove=0, pendingMove=null;
+function moveTo(p){ cur=p; placeCursor(); pendingMove=p; const n=performance.now(); if(n-lastMove>14){ flushMove(); } else requestAnimationFrame(flushMove); }
+function flushMove(){ if(!pendingMove) return; send({t:'m',a:'move',x:pendingMove.x,y:pendingMove.y}); pendingMove=null; lastMove=performance.now(); }
+function btn(a,b,p){ flushMove(); send({t:'m',a,b,x:p.x,y:p.y}); }
+function click(p,b=0){ btn('down',b,p); btn('up',b,p); }
+
+// Fare (masaüstü)
+cv.addEventListener('pointermove',e=>{ if(e.pointerType!=='mouse'||!authed) return; moveTo(norm(e.clientX,e.clientY)); });
+cv.addEventListener('pointerdown',e=>{ if(e.pointerType!=='mouse'||!authed) return; e.preventDefault(); cv.setPointerCapture(e.pointerId); btn('down',e.button,norm(e.clientX,e.clientY)); });
+cv.addEventListener('pointerup',e=>{ if(e.pointerType!=='mouse'||!authed) return; btn('up',e.button,norm(e.clientX,e.clientY)); });
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+stage.addEventListener('wheel',e=>{ if(!authed||(zoom>1&&e.shiftKey)) return; e.preventDefault(); let k=e.deltaMode===1?40:e.deltaMode===2?400:1; send({t:'m',a:'wheel',dy:e.deltaY*k,dx:e.deltaX*k}); },{passive:false});
+
+// Dokunmatik (telefon / tablet)
+let T={};
+stage.addEventListener('touchstart',e=>{
+  if(!authed||pan) return; e.preventDefault(); const ts=e.touches;
+  if(ts.length===1){ const t=ts[0]; T={n:1,sx:t.clientX,sy:t.clientY,lx:t.clientX,ly:t.clientY,moved:false,drag:false,done:false,t0:Date.now()};
+    if(mouseMode==='touch'){ moveTo(norm(t.clientX,t.clientY)); T.lp=setTimeout(()=>{ if(!T.moved){ T.done=true; click(cur,2); navigator.vibrate&&navigator.vibrate(20);} },550); }
+    else { T.lp=setTimeout(()=>{ if(!T.moved){ T.drag=true; btn('down',0,cur); navigator.vibrate&&navigator.vibrate(20);} },450); }
+  } else if(ts.length===2){ clearTimeout(T.lp); if(T.drag) btn('up',0,cur); T={n:2,y:(ts[0].clientY+ts[1].clientY)/2,x:(ts[0].clientX+ts[1].clientX)/2,moved:false,t0:Date.now()}; }
+},{passive:false});
+stage.addEventListener('touchmove',e=>{
+  if(!authed||pan) return; e.preventDefault(); const ts=e.touches;
+  if(T.n===1&&ts.length===1){ const t=ts[0], dist=Math.hypot(t.clientX-T.sx,t.clientY-T.sy);
+    if(dist>8&&!T.moved){ T.moved=true; clearTimeout(T.lp); if(mouseMode==='touch'&&!T.done){ T.drag=true; btn('down',0,norm(T.sx,T.sy)); } }
+    if(mouseMode==='touch') moveTo(norm(t.clientX,t.clientY));
+    else{ const r=cv.getBoundingClientRect(), sp=1.6; moveTo({x:Math.min(1,Math.max(0,cur.x+(t.clientX-T.lx)/r.width*sp)), y:Math.min(1,Math.max(0,cur.y+(t.clientY-T.ly)/r.height*sp))}); }
+    T.lx=t.clientX; T.ly=t.clientY;
+  } else if(T.n===2&&ts.length===2){ const y=(ts[0].clientY+ts[1].clientY)/2, x=(ts[0].clientX+ts[1].clientX)/2;
+    const dy=(T.y-y)*3, dx=(T.x-x)*3; if(Math.abs(dy)>2||Math.abs(dx)>2){ T.moved=true; send({t:'m',a:'wheel',dy,dx}); T.y=y; T.x=x; } }
+},{passive:false});
+stage.addEventListener('touchend',e=>{
+  if(!authed||pan) return; e.preventDefault(); clearTimeout(T.lp);
+  if(T.n===1&&e.touches.length===0){
+    if(T.drag) btn('up',0,cur);
+    else if(!T.moved&&!T.done) click(mouseMode==='touch'?norm(T.sx,T.sy):cur,0);
+    T={};
+  } else if(T.n===2&&e.touches.length===0){ if(!T.moved&&Date.now()-T.t0<350) click(cur,2); T={}; }
+},{passive:false});
+
+// Klavye
+const kb=$('#kb'), held=new Set(), stickyMods=new Set();
+function keyMsg(a,code,key,e){ send({t:'k',a,code,key,ctrl:e?e.ctrlKey:stickyMods.has('ControlLeft'),alt:e?e.altKey:stickyMods.has('AltLeft'),meta:e?e.metaKey:false}); if(a==='down')held.add(code);else held.delete(code); }
+function releaseMods(){ held.forEach(c=>send({t:'k',a:'up',code:c,key:''})); held.clear(); }
+addEventListener('blur',releaseMods);
+addEventListener('keydown',e=>{
+  if(!authed) return; const tg=e.target;
+  if(tg!==kb&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA')) return;
+  if(tg===kb&&((e.key.length===1&&!e.ctrlKey&&!e.altKey)||e.key==='Unidentified'||e.key==='Process'||e.isComposing)) return;
+  e.preventDefault(); keyMsg('down',e.code,e.key,e);
+});
+addEventListener('keyup',e=>{
+  if(!authed) return; const tg=e.target;
+  if(tg!==kb&&(tg.tagName==='INPUT'||tg.tagName==='TEXTAREA')) return;
+  if(!held.has(e.code)) return; e.preventDefault(); keyMsg('up',e.code,e.key,e);
+});
+kb.addEventListener('beforeinput',e=>{
+  if(!authed) return;
+  if(e.inputType==='insertText'||e.inputType==='insertCompositionText'||e.inputType==='insertReplacementText'){ if(e.data){ if(stickyMods.size){ sendWithMods(e.data); } else send({t:'type',text:e.data}); } }
+  else if(e.inputType==='deleteContentBackward') tap('Backspace');
+  else if(e.inputType==='insertLineBreak'||e.inputType==='insertParagraph') tap('Enter');
+  e.preventDefault(); kb.value='';
+});
+kb.addEventListener('input',()=>{ kb.value=''; });
+function tap(code){ const mods=[...stickyMods]; mods.forEach(m=>keyMsg('down',m,'')); keyMsg('down',code,''); keyMsg('up',code,''); mods.forEach(m=>keyMsg('up',m,'')); clearSticky(); }
+function sendWithMods(ch){ const c=ch.toUpperCase(); const code=/[A-Z]/.test(c)?'Key'+c:/[0-9]/.test(c)?'Digit'+c:null; if(code) tap(code); else{ send({t:'type',text:ch}); clearSticky(); } }
+function clearSticky(){ stickyMods.clear(); $$('#keys [data-mod]').forEach(b=>b.classList.remove('on')); }
+$('#bKb').onclick=()=>{ const on=!$('#keys').classList.contains('show'); $('#keys').classList.toggle('show',on); $('#bKb').classList.toggle('on',on); if(on&&MOBILE){ kb.focus(); } else kb.blur(); };
+$$('#keys [data-k]').forEach(b=>b.addEventListener('click',()=>{ tap(b.dataset.k); if(MOBILE) kb.focus(); }));
+$$('#keys [data-mod]').forEach(b=>b.addEventListener('click',()=>{ const m=b.dataset.mod; stickyMods.has(m)?stickyMods.delete(m):stickyMods.add(m); b.classList.toggle('on',stickyMods.has(m)); if(MOBILE) kb.focus(); }));
+$('#keys').addEventListener('pointerdown',e=>e.preventDefault());
+
+// Sohbet
+function addMsg(t,me){ const d=document.createElement('div'); d.className='msg'+(me?' me':''); d.textContent=t; $('#chatlog').append(d); $('#chatlog').scrollTop=1e9; }
+$('#bChat').onclick=()=>{ $('#chat').classList.toggle('show'); $('#bChat').classList.toggle('on'); if($('#chat').classList.contains('show')) $('#chatIn').focus(); };
+$('#chatX').onclick=()=>$('#bChat').click();
+$('#chatF').onsubmit=e=>{ e.preventDefault(); const t=$('#chatIn').value.trim(); if(!t) return; send({t:'chat',text:t}); addMsg(t,true); $('#chatIn').value=''; };
+
+// Pano
+let clipMode='send';
+function showClip(mode,text=''){ clipMode=mode; $('#clipT').textContent=mode==='send'?'Karşı panoya metin gönder':'Karşı bilgisayarın panosu';
+  $('#clipTxt').value=text; $('#clipOk').textContent=mode==='send'?'Gönder':'Kopyala';
+  $('#clipHint').textContent=mode==='send'?'Metni buraya yapıştırın; karşı bilgisayarda Ctrl+V ile kullanabilirsiniz.':'Metni seçip kopyalayabilirsiniz.';
+  $('#clipM').classList.add('show'); setTimeout(()=>$('#clipTxt').focus(),50); }
+$('#mClipSend').onclick=async()=>{ $('#menu').classList.remove('show'); let t=''; try{ t=await navigator.clipboard.readText(); }catch(e){} showClip('send',t); };
+$('#mClipGet').onclick=()=>{ $('#menu').classList.remove('show'); send({t:'clipget'}); };
+$('#clipCancel').onclick=()=>$('#clipM').classList.remove('show');
+$('#clipOk').onclick=async()=>{ const t=$('#clipTxt').value;
+  if(clipMode==='send'){ send({t:'clip',text:t}); }
+  else{ try{ await navigator.clipboard.writeText(t); toast('Kopyalandı','ok'); }catch(e){ $('#clipTxt').select(); document.execCommand('copy'); toast('Kopyalandı','ok'); } }
+  $('#clipM').classList.remove('show'); };
+
+// Dosya gönderme
+$('#mFile').onclick=()=>$('#fileIn').click();
+$('#fileIn').onchange=async()=>{ for(const f of $('#fileIn').files) await sendFile(f); $('#fileIn').value=''; };
+async function sendFile(f){
+  if(!perm.files){ toast('Karşı taraf dosya alımını kapatmış','bad'); return; }
+  const id=Math.random().toString(36).slice(2), CH=192*1024; send({t:'file',a:'start',id,name:f.name,size:f.size});
+  for(let o=0;o<f.size;o+=CH){
+    const buf=new Uint8Array(await f.slice(o,o+CH).arrayBuffer()); let s=''; for(let i=0;i<buf.length;i+=0x8000) s+=String.fromCharCode.apply(null,buf.subarray(i,i+0x8000));
+    const p=new Promise(r=>ackWaiters[id]=r); send({t:'file',a:'chunk',id,data:btoa(s)}); await p;
+    $('#fileProg').textContent='%'+Math.round(Math.min(1,(o+CH)/f.size)*100);
+  }
+  send({t:'file',a:'end',id}); delete ackWaiters[id]; $('#fileProg').textContent='';
+}
+stage.addEventListener('dragover',e=>e.preventDefault());
+stage.addEventListener('drop',async e=>{ e.preventDefault(); if(!authed) return; for(const f of e.dataTransfer.files) await sendFile(f); });
+
+connect();
+</script>
+</body>
+</html>
