@@ -9,6 +9,8 @@
 <title>SineDesk — Uzak Masaüstü</title>
 <link rel="icon" href="/static/icon.svg">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="apple-mobile-web-app-title" content="SineDesk">
 <link rel="stylesheet" href="/static/sd.css">
 <style>
 html,body{overflow:hidden;background:#05070B;overscroll-behavior:none}
@@ -131,13 +133,15 @@ html,body{overflow:hidden;background:#05070B;overscroll-behavior:none}
       <form id="ovAuth" style="display:none">
         <p style="font-weight:700;font-size:16px;margin-bottom:4px" id="ovTitle">Uzak bilgisayar</p>
         <p class="muted" style="font-size:13px;margin-bottom:16px">Karşı bilgisayarda görünen şifreyi girin.</p>
+        <label class="field" id="idField" style="display:none;margin-bottom:12px"><span>SineDesk ID</span><input class="in mono" id="rid" inputmode="numeric" autocomplete="off" maxlength="11" style="font-size:18px;letter-spacing:.12em"></label>
         <label class="field"><span>Şifre</span><input class="in mono" id="pw" type="password" autocomplete="current-password" required></label>
         <button class="btn pri" style="width:100%;margin-top:16px;height:46px">Bağlan</button>
+        <a class="btn ghost" href="/" style="width:100%;margin-top:8px">Başka bilgisayar seç</a>
       </form>
       <div id="ovErr" style="display:none;text-align:center">
         <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,84,112,.12);color:var(--bad);display:flex;align-items:center;justify-content:center;margin:4px auto 14px"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="10"/></svg></div>
         <p style="font-weight:700" id="ovErrT">Bağlantı kapandı</p><p class="muted" style="font-size:13px;margin-top:4px" id="ovErrD"></p>
-        <div class="row" style="margin-top:18px;justify-content:center"><button class="btn" id="ovBack">Geri</button><button class="btn pri" id="ovRetry">Yeniden bağlan</button></div>
+        <div class="row" style="margin-top:18px;justify-content:center"><button class="btn" id="ovBack">Başka bilgisayar</button><button class="btn pri" id="ovRetry">Yeniden bağlan</button></div>
       </div>
     </div>
     <p class="dim" style="font-size:12px;margin-top:18px">SineDesk · Volkan Sezer</p>
@@ -168,7 +172,7 @@ function wsUrl(){
   return `ws://${hp}/ws/remote`;
 }
 const label=qs.get('name')||qs.get('id')||(qs.get('target')&&qs.get('target')!=='self'?qs.get('target'):location.hostname);
-$('#rname').textContent=label; $('#ovTitle').textContent=label; document.title='SineDesk — '+label;
+$('#rname').textContent=label; $('#ovTitle').textContent=qs.get('id')&&!qs.get('name')?label.replace(/(\d{3})(?=\d)/g,'$1 '):label; document.title='SineDesk — '+label;
 
 function ovState(s,msg){ $('#ov').classList.toggle('hide',s==='none');
   $('#ovWait').style.display=s==='wait'?'':'none'; $('#ovAuth').style.display=s==='auth'?'':'none'; $('#ovErr').style.display=s==='err'?'':'none';
@@ -187,7 +191,8 @@ function connect(){
     if(typeof ev.data!=='string'){ drawFrame(ev.data); return; }
     const m=JSON.parse(ev.data);
     switch(m.t){
-      case 'hello': gotHello=true; if(!qs.get('name')&&m.name){$('#rname').textContent=m.name;$('#ovTitle').textContent=m.name;} ovState('auth'); break;
+      case 'hello': gotHello=true; if(!qs.get('name')&&m.name){$('#rname').textContent=m.name;$('#ovTitle').textContent=m.name;}
+        if(pendingPw){ send({t:'auth',pw:pendingPw}); pendingPw=null; ovState('wait','Doğrulanıyor…'); } else ovState('auth'); break;
       case 'wait': ovState('wait','Karşı tarafın bağlantıyı onaylaması bekleniyor…'); break;
       case 'auth_fail': failReason=m.reason; ovState('err',m.reason); $('#ovErrT').textContent='Bağlanılamadı'; break;
       case 'auth_ok': authed=true; monitors=m.monitors||[]; perm=m.perm||perm; ovState('none'); buildMon(); applyQ(quality); showBar(true);
@@ -203,9 +208,20 @@ function connect(){
   };
   ws.onclose=()=>{ releaseMods(); if(!failReason){ $('#ovErrT').textContent=authed?'Bağlantı kapandı':'Bağlanılamadı'; ovState('err',authed?'Uzak oturum sona erdi.':'Bilgisayara ulaşılamadı. SineDesk açık mı, adres ve port doğru mu?'); } authed=false; };
 }
-$('#ovAuth').onsubmit=e=>{e.preventDefault(); send({t:'auth',pw:$('#pw').value.trim()}); ovState('wait','Doğrulanıyor…');};
+let pendingPw=null;
+const fmtId=v=>v.replace(/\D/g,'').slice(0,9).replace(/(\d{3})(?=\d)/g,'$1 ');
+if(qs.get('id')){ $('#idField').style.display=''; $('#rid').value=fmtId(qs.get('id')); }
+$('#rid').addEventListener('input',e=>e.target.value=fmtId(e.target.value));
+$('#ovAuth').onsubmit=e=>{ e.preventDefault(); const pw=$('#pw').value.trim();
+  if(qs.get('id')){ const nid=$('#rid').value.replace(/\D/g,'');
+    if(nid.length!==9){ toast('ID 9 haneli olmalı','bad'); return; }
+    if(nid!==qs.get('id')){ qs.set('id',nid); qs.delete('name'); history.replaceState(null,'','?'+qs.toString());
+      $('#rname').textContent=nid; $('#ovTitle').textContent=fmtId(nid); document.title='SineDesk — '+nid;
+      try{ const r=JSON.parse(localStorage.getItem('sd_recent')||'[]'); localStorage.setItem('sd_recent',JSON.stringify([nid,...r.filter(x=>x!==nid)].slice(0,5))); }catch(e){}
+      pendingPw=pw; if(ws){ ws.onclose=null; ws.close(); } connect(); return; } }
+  send({t:'auth',pw}); ovState('wait','Doğrulanıyor…'); };
 $('#ovRetry').onclick=()=>connect();
-$('#ovBack').onclick=()=>{ if(history.length>1) history.back(); else location.href='/'; };
+$('#ovBack').onclick=()=>{ location.href='/'; };
 $('#bClose').onclick=()=>{ if(ws) ws.close(); };
 
 // Kare çizimi

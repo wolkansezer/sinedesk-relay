@@ -60,7 +60,6 @@ let RELAY='';
 fetch('/info').then(r=>r.json()).then(i=>{
   if(i.kind==='host'){ $('#hostCard').style.display=''; $('#hn').textContent=i.name||location.hostname; RELAY=i.relay||''; if(!RELAY) $('#noRelay').style.display=''; }
 }).catch(()=>{});
-renderRecent();
 const fmt=v=>v.replace(/\D/g,'').slice(0,9).replace(/(\d{3})(?=\d)/g,'$1 ');
 $('#rid').addEventListener('input',e=>e.target.value=fmt(e.target.value));
 function getRecent(){ try{return JSON.parse(localStorage.getItem('sd_recent')||'[]')}catch(e){return[]} }
@@ -68,6 +67,7 @@ function renderRecent(){ const r=$('#recent'); r.innerHTML=''; getRecent().forEa
   d.innerHTML='<i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></i><span class="mono" style="font-weight:600;letter-spacing:.1em"></span>';
   d.querySelector('span').textContent=fmt(id); d.onclick=()=>go(id); r.append(d); }); }
 function go(id){ try{ localStorage.setItem('sd_recent',JSON.stringify([id,...getRecent().filter(x=>x!==id)].slice(0,5))); }catch(e){} location.href='/viewer?id='+id+(RELAY?'&relay='+encodeURIComponent(RELAY):''); }
+renderRecent();
 $('#relayCard').onsubmit=e=>{ e.preventDefault(); const id=$('#rid').value.replace(/\D/g,''); if(id.length!==9) return alert('ID 9 haneli olmalı'); go(id); };
 </script>
 </body>
